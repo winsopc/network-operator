@@ -453,9 +453,21 @@ spec:
                     description: Interval of updates in seconds
                     minimum: 0
                     type: integer
+                  plugin:
+                    default: ufm
+                    description: Plugin selects the ib-kubernetes subnet manager backend.
+                    enum:
+                    - ufm
+                    - nico
+                    type: string
                   repository:
                     description: Address of the registry that stores the image
                     pattern: '[a-zA-Z0-9\.\-\/]+'
+                    type: string
+                  secretRef:
+                    description: |-
+                      SecretRef references a Secret with plugin-specific credentials (required for nico plugin).
+                      The secret should contain keys like NICO_BASE_URL, NICO_ORG, NICO_TOKEN.
                     type: string
                   ufmSecret:
                     description: Secret containing credentials to UFM service
@@ -465,9 +477,6 @@ spec:
                     type: string
                 required:
                 - image
-                - pKeyGUIDPoolRangeEnd
-                - pKeyGUIDPoolRangeStart
-                - ufmSecret
                 type: object
               nicConfigurationOperator:
                 description: |-

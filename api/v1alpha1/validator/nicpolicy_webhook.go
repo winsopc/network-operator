@@ -628,6 +628,39 @@ func (dts *docaTelemetryServiceWrapper) validate(fldPath *field.Path) field.Erro
 func (ibk *ibKubernetesSpecWrapper) validate(fldPath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 
+	plugin := strings.ToLower(strings.TrimSpace(ibk.Plugin))
+	if plugin == "" {
+		plugin = v1alpha1.IBKubernetesPluginUFM
+	}
+
+	switch plugin {
+	case v1alpha1.IBKubernetesPluginUFM:
+		if ibk.UfmSecret == "" {
+			allErrs = append(allErrs, field.Required(fldPath.Child("ufmSecret"),
+				"ufmSecret is required when plugin is ufm"))
+		}
+		if ibk.PKeyGUIDPoolRangeStart == "" {
+			allErrs = append(allErrs, field.Required(fldPath.Child("pKeyGUIDPoolRangeStart"),
+				"pKeyGUIDPoolRangeStart is required when plugin is ufm"))
+		}
+		if ibk.PKeyGUIDPoolRangeEnd == "" {
+			allErrs = append(allErrs, field.Required(fldPath.Child("pKeyGUIDPoolRangeEnd"),
+				"pKeyGUIDPoolRangeEnd is required when plugin is ufm"))
+		}
+		if len(allErrs) > 0 {
+			return allErrs
+		}
+	case v1alpha1.IBKubernetesPluginNICO:
+		if ibk.SecretRef == "" {
+			allErrs = append(allErrs, field.Required(fldPath.Child("secretRef"),
+				"secretRef is required when plugin is nico"))
+		}
+		return allErrs
+	default:
+		return append(allErrs, field.NotSupported(fldPath.Child("plugin"), ibk.Plugin,
+			[]string{v1alpha1.IBKubernetesPluginUFM, v1alpha1.IBKubernetesPluginNICO}))
+	}
+
 	if !isValidPKeyGUID(ibk.PKeyGUIDPoolRangeStart) || !isValidPKeyGUID(ibk.PKeyGUIDPoolRangeEnd) {
 		if !isValidPKeyGUID(ibk.PKeyGUIDPoolRangeStart) {
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("pKeyGUIDPoolRangeStart"),

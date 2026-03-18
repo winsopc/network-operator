@@ -26,6 +26,11 @@ import (
 const (
 	// NicClusterPolicyCRDName is used for the CRD Kind.
 	NicClusterPolicyCRDName = "NicClusterPolicy"
+
+	// IBKubernetesPluginUFM deploys ib-kubernetes with the UFM subnet manager plugin.
+	IBKubernetesPluginUFM = "ufm"
+	// IBKubernetesPluginNICO deploys ib-kubernetes with the NICO subnet manager plugin.
+	IBKubernetesPluginNICO = "nico"
 )
 
 // State represents reconcile state of the system.
@@ -292,12 +297,24 @@ type IBKubernetesSpec struct {
 	// +kubebuilder:default:=5
 	// +kubebuilder:validation:Minimum:=0
 	PeriodicUpdateSeconds int `json:"periodicUpdateSeconds,omitempty"`
+	// Plugin selects the ib-kubernetes subnet manager backend.
+	// +optional
+	// +kubebuilder:default:=ufm
+	// +kubebuilder:validation:Enum:=ufm;nico
+	Plugin string `json:"plugin,omitempty"`
 	// The first guid in the pool
-	PKeyGUIDPoolRangeStart string `json:"pKeyGUIDPoolRangeStart"`
+	// +optional
+	PKeyGUIDPoolRangeStart string `json:"pKeyGUIDPoolRangeStart,omitempty"`
 	// The last guid in the pool
-	PKeyGUIDPoolRangeEnd string `json:"pKeyGUIDPoolRangeEnd"`
+	// +optional
+	PKeyGUIDPoolRangeEnd string `json:"pKeyGUIDPoolRangeEnd,omitempty"`
 	// Secret containing credentials to UFM service
-	UfmSecret string `json:"ufmSecret"`
+	// +optional
+	UfmSecret string `json:"ufmSecret,omitempty"`
+	// SecretRef references a Secret with plugin-specific credentials (required for nico plugin).
+	// The secret should contain keys like NICO_BASE_URL, NICO_ORG, NICO_TOKEN.
+	// +optional
+	SecretRef string `json:"secretRef,omitempty"`
 }
 
 // NVIPAMSpec describes configuration options for nv-ipam

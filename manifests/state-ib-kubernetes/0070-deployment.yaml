@@ -126,13 +126,18 @@ spec:
                 fieldRef:
                   fieldPath: metadata.uid
             - name: DAEMON_SM_PLUGIN
-              value: "ufm"
+              value: {{ .Plugin | quote }}
             - name: DAEMON_PERIODIC_UPDATE
               value: {{ .PeriodicUpdateSecondsString | quote }}
+            {{- if .CrSpec.PKeyGUIDPoolRangeStart }}
             - name: GUID_POOL_RANGE_START
-              value: {{ .CrSpec.PKeyGUIDPoolRangeStart }}
+              value: {{ .CrSpec.PKeyGUIDPoolRangeStart | quote }}
+            {{- end }}
+            {{- if .CrSpec.PKeyGUIDPoolRangeEnd }}
             - name: GUID_POOL_RANGE_END
-              value: {{ .CrSpec.PKeyGUIDPoolRangeEnd }}
+              value: {{ .CrSpec.PKeyGUIDPoolRangeEnd | quote }}
+            {{- end }}
+            {{- if eq .Plugin "ufm" }}
             - name: UFM_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -166,3 +171,9 @@ spec:
                   name: {{ .CrSpec.UfmSecret }}
                   key: UFM_CERTIFICATE
                   optional: true
+            {{- end }}
+          {{- if and (eq .Plugin "nico") .CrSpec.SecretRef }}
+          envFrom:
+            - secretRef:
+                name: {{ .CrSpec.SecretRef }}
+          {{- end }}

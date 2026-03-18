@@ -47,6 +47,7 @@ var _ = Describe("Validate", func() {
 					IBKubernetes: &v1alpha1.IBKubernetesSpec{
 						PKeyGUIDPoolRangeStart: "00:00:00:00:00:00:00:00",
 						PKeyGUIDPoolRangeEnd:   "00:00:00:00:00:00:00:01",
+						UfmSecret:              "ufm-secret",
 						ImageSpec: v1alpha1.ImageSpec{
 							Image:            "ib-kubernetes",
 							Repository:       "ghcr.io/mellanox",
@@ -68,6 +69,7 @@ var _ = Describe("Validate", func() {
 					IBKubernetes: &v1alpha1.IBKubernetesSpec{
 						PKeyGUIDPoolRangeStart: "00:00:00:00:00:00:00:02",
 						PKeyGUIDPoolRangeEnd:   "00:00:00:00:00:00:00:00",
+						UfmSecret:              "ufm-secret",
 						ImageSpec: v1alpha1.ImageSpec{
 							Image:            "ib-kubernetes",
 							Repository:       "ghcr.io/mellanox",
@@ -89,6 +91,7 @@ var _ = Describe("Validate", func() {
 					IBKubernetes: &v1alpha1.IBKubernetesSpec{
 						PKeyGUIDPoolRangeStart: "00:00:00:00",
 						PKeyGUIDPoolRangeEnd:   "00:00:00:00",
+						UfmSecret:              "ufm-secret",
 						ImageSpec: v1alpha1.ImageSpec{
 							Image:            "ib-kubernetes",
 							Repository:       "ghcr.io/mellanox",
@@ -102,6 +105,88 @@ var _ = Describe("Validate", func() {
 			Expect(err.Error()).To(And(
 				ContainSubstring("pKeyGUIDPoolRangeStart must be a valid GUID format"),
 				ContainSubstring("pKeyGUIDPoolRangeEnd must be a valid GUID format")))
+		})
+		It("Default ib-kubernetes plugin requires ufmSecret", func() {
+			validator := nicClusterPolicyValidator{}
+			nicClusterPolicy := &v1alpha1.NicClusterPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test"},
+				Spec: v1alpha1.NicClusterPolicySpec{
+					IBKubernetes: &v1alpha1.IBKubernetesSpec{
+						PKeyGUIDPoolRangeStart: "00:00:00:00:00:00:00:00",
+						PKeyGUIDPoolRangeEnd:   "00:00:00:00:00:00:00:01",
+						ImageSpec: v1alpha1.ImageSpec{
+							Image:            "ib-kubernetes",
+							Repository:       "ghcr.io/mellanox",
+							Version:          "v1.0.2",
+							ImagePullSecrets: []string{},
+						},
+					},
+				},
+			}
+
+			_, err := validator.ValidateCreate(context.TODO(), nicClusterPolicy)
+			Expect(err.Error()).To(ContainSubstring("ufmSecret is required when plugin is ufm"))
+		})
+		It("Nico ib-kubernetes plugin requires secretRef only", func() {
+			validator := nicClusterPolicyValidator{}
+			nicClusterPolicy := &v1alpha1.NicClusterPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test"},
+				Spec: v1alpha1.NicClusterPolicySpec{
+					IBKubernetes: &v1alpha1.IBKubernetesSpec{
+						Plugin:    v1alpha1.IBKubernetesPluginNICO,
+						SecretRef: "nico-secret",
+						ImageSpec: v1alpha1.ImageSpec{
+							Image:            "ib-kubernetes",
+							Repository:       "ghcr.io/mellanox",
+							Version:          "v1.0.2",
+							ImagePullSecrets: []string{},
+						},
+					},
+				},
+			}
+
+			_, err := validator.ValidateCreate(context.TODO(), nicClusterPolicy)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("Nico ib-kubernetes plugin rejects missing secretRef", func() {
+			validator := nicClusterPolicyValidator{}
+			nicClusterPolicy := &v1alpha1.NicClusterPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test"},
+				Spec: v1alpha1.NicClusterPolicySpec{
+					IBKubernetes: &v1alpha1.IBKubernetesSpec{
+						Plugin: v1alpha1.IBKubernetesPluginNICO,
+						ImageSpec: v1alpha1.ImageSpec{
+							Image:            "ib-kubernetes",
+							Repository:       "ghcr.io/mellanox",
+							Version:          "v1.0.2",
+							ImagePullSecrets: []string{},
+						},
+					},
+				},
+			}
+
+			_, err := validator.ValidateCreate(context.TODO(), nicClusterPolicy)
+			Expect(err.Error()).To(ContainSubstring("secretRef is required when plugin is nico"))
+		})
+		It("Unknown ib-kubernetes plugin is rejected", func() {
+			validator := nicClusterPolicyValidator{}
+			nicClusterPolicy := &v1alpha1.NicClusterPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test"},
+				Spec: v1alpha1.NicClusterPolicySpec{
+					IBKubernetes: &v1alpha1.IBKubernetesSpec{
+						Plugin: "unknown",
+						ImageSpec: v1alpha1.ImageSpec{
+							Image:            "ib-kubernetes",
+							Repository:       "ghcr.io/mellanox",
+							Version:          "v1.0.2",
+							ImagePullSecrets: []string{},
+						},
+					},
+				},
+			}
+
+			_, err := validator.ValidateCreate(context.TODO(), nicClusterPolicy)
+			Expect(err.Error()).To(ContainSubstring("supported values"))
 		})
 		It("Valid MOFED version (old scheme)", func() {
 			validator := nicClusterPolicyValidator{}
@@ -666,6 +751,7 @@ var _ = Describe("Validate", func() {
 					IBKubernetes: &v1alpha1.IBKubernetesSpec{
 						PKeyGUIDPoolRangeStart: "00:00:00:00:00:00:00:00",
 						PKeyGUIDPoolRangeEnd:   "00:00:00:00:00:00:00:02",
+						UfmSecret:              "ufm-secret",
 						ImageSpec: v1alpha1.ImageSpec{
 							Image:            "ib-kubernetes",
 							Repository:       "ghcr.io/mellanox!@!#$!",

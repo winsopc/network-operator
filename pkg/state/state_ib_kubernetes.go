@@ -16,6 +16,7 @@ package state //nolint:dupl
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -67,6 +68,7 @@ type IBKubernetesSpec struct {
 // IBKubernetesManifestRenderData contains information used to render Kubernetes objects related to Infiniband.
 type IBKubernetesManifestRenderData struct {
 	CrSpec                      *mellanoxv1alpha1.IBKubernetesSpec
+	Plugin                      string
 	PeriodicUpdateSecondsString string
 	Tolerations                 []v1.Toleration
 	NodeAffinity                *v1.NodeAffinity
@@ -154,8 +156,13 @@ func (s *stateIBKubernetes) GetManifestObjects(
 	if clusterInfo == nil {
 		return nil, errors.New("clusterType provider required")
 	}
+	plugin := strings.ToLower(strings.TrimSpace(cr.Spec.IBKubernetes.Plugin))
+	if plugin == "" {
+		plugin = mellanoxv1alpha1.IBKubernetesPluginUFM
+	}
 	renderData := &IBKubernetesManifestRenderData{
 		CrSpec:                      cr.Spec.IBKubernetes,
+		Plugin:                      plugin,
 		PeriodicUpdateSecondsString: strconv.Itoa(cr.Spec.IBKubernetes.PeriodicUpdateSeconds),
 		Tolerations:                 cr.Spec.Tolerations,
 		NodeAffinity:                cr.Spec.NodeAffinity,

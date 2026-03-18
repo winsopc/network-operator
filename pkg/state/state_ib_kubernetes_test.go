@@ -149,6 +149,147 @@ var _ = Describe("IB Kubernetes state rendering tests", func() {
 			}
 			Expect(expectedFieldRefs).To(BeEmpty(), "missing fieldRef env vars: %v", expectedFieldRefs)
 		})
+		It("Should Render NICO plugin configuration", func() {
+			client := mocks.ControllerRuntimeClient{}
+			manifestBaseDir := "../../manifests/state-ib-kubernetes"
+
+			files, err := utils.GetFilesWithSuffix(manifestBaseDir, render.ManifestFileSuffix...)
+			Expect(err).NotTo(HaveOccurred())
+			renderer := render.NewRenderer(files)
+
+			ibKubernetesState := stateIBKubernetes{
+				stateSkel: stateSkel{
+					client:   &client,
+					renderer: renderer,
+				},
+			}
+
+			ibKubernetesSpec := &mellanoxv1alpha1.IBKubernetesSpec{}
+			ibKubernetesSpec.Plugin = mellanoxv1alpha1.IBKubernetesPluginNICO
+			ibKubernetesSpec.SecretRef = "nico-secret"
+			ibKubernetesSpec.PeriodicUpdateSeconds = 7
+			ibKubernetesSpec.Image = "image"
+			ibKubernetesSpec.Repository = "repository"
+			ibKubernetesSpec.ImagePullSecrets = []string{}
+			ibKubernetesSpec.Version = "version"
+
+			cr := &mellanoxv1alpha1.NicClusterPolicy{}
+			cr.Spec.IBKubernetes = ibKubernetesSpec
+
+			catalog := NewInfoCatalog()
+			catalog.Add(InfoTypeClusterType, &dummyProvider{})
+
+			objs, err := ibKubernetesState.GetManifestObjects(context.TODO(), cr, catalog, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(objs)).To(Equal(4))
+
+			deployment := objs[3]
+			Expect(deployment.GetKind()).To(Equal("Deployment"))
+
+			spec := deployment.Object["spec"].(map[string]interface{})
+			template := spec["template"].(map[string]interface{})
+			templateSpec := template["spec"].(map[string]interface{})
+			containers := templateSpec["containers"].([]interface{})
+			container := containers[0].(map[string]interface{})
+			env := container["env"].([]interface{})
+
+			envByName := map[string]map[string]interface{}{}
+			for _, envVar := range env {
+				envMap := envVar.(map[string]interface{})
+				envByName[envMap["name"].(string)] = envMap
+			}
+
+			Expect(envByName["DAEMON_SM_PLUGIN"]["value"]).To(Equal("nico"))
+			Expect(envByName["DAEMON_PERIODIC_UPDATE"]["value"]).To(Equal("7"))
+			Expect(envByName).NotTo(HaveKey("GUID_POOL_RANGE_START"))
+			Expect(envByName).NotTo(HaveKey("GUID_POOL_RANGE_END"))
+			Expect(envByName).NotTo(HaveKey("UFM_USERNAME"))
+
+			nodeEnv, exists := envByName["K8S_NODE"]
+			Expect(exists).To(BeTrue())
+			valueFrom, ok := nodeEnv["valueFrom"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			fieldRef, ok := valueFrom["fieldRef"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(fieldRef["fieldPath"]).To(Equal("spec.nodeName"))
+
+			envFrom, ok := container["envFrom"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(len(envFrom)).To(Equal(1))
+
+			secretRef := envFrom[0].(map[string]interface{})["secretRef"].(map[string]interface{})
+			Expect(secretRef["name"]).To(Equal("nico-secret"))
+		})
+		It("Should Render ClusterRole permissions required by NICO", func() {
+			client := mocks.ControllerRuntimeClient{}
+			manifestBaseDir := "../../manifests/state-ib-kubernetes"
+
+			files, err := utils.GetFilesWithSuffix(manifestBaseDir, render.ManifestFileSuffix...)
+			Expect(err).NotTo(HaveOccurred())
+			renderer := render.NewRenderer(files)
+
+			ibKubernetesState := stateIBKubernetes{
+				stateSkel: stateSkel{
+					client:   &client,
+					renderer: renderer,
+				},
+			}
+
+			ibKubernetesSpec := &mellanoxv1alpha1.IBKubernetesSpec{}
+			ibKubernetesSpec.Plugin = mellanoxv1alpha1.IBKubernetesPluginNICO
+			ibKubernetesSpec.SecretRef = "nico-secret"
+			ibKubernetesSpec.Image = "image"
+			ibKubernetesSpec.Repository = "repository"
+			ibKubernetesSpec.ImagePullSecrets = []string{}
+			ibKubernetesSpec.Version = "version"
+
+			cr := &mellanoxv1alpha1.NicClusterPolicy{}
+			cr.Spec.IBKubernetes = ibKubernetesSpec
+
+			catalog := NewInfoCatalog()
+			catalog.Add(InfoTypeClusterType, &dummyProvider{})
+
+			objs, err := ibKubernetesState.GetManifestObjects(context.TODO(), cr, catalog, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(objs)).To(Equal(4))
+
+			clusterRole := objs[1]
+			Expect(clusterRole.GetKind()).To(Equal("ClusterRole"))
+
+			rules := clusterRole.Object["rules"].([]interface{})
+			foundNADRule := false
+			foundLeasesRule := false
+			foundEventsRule := false
+
+			for _, rule := range rules {
+				ruleMap := rule.(map[string]interface{})
+				apiGroups := toStringSlice(ruleMap["apiGroups"].([]interface{}))
+				resources := toStringSlice(ruleMap["resources"].([]interface{}))
+				verbs := toStringSlice(ruleMap["verbs"].([]interface{}))
+
+				if len(apiGroups) == 1 && apiGroups[0] == "k8s.cni.cncf.io" &&
+					len(resources) == 1 && resources[0] == "network-attachment-definitions" {
+					foundNADRule = true
+					Expect(verbs).To(ContainElements("get", "list", "watch", "update", "patch"))
+				}
+
+				if len(apiGroups) == 1 && apiGroups[0] == "coordination.k8s.io" &&
+					len(resources) == 1 && resources[0] == "leases" {
+					foundLeasesRule = true
+					Expect(verbs).To(ContainElements("get", "list", "create", "update", "patch", "watch"))
+				}
+
+				if len(apiGroups) == 1 && apiGroups[0] == "" &&
+					len(resources) == 1 && resources[0] == "events" {
+					foundEventsRule = true
+					Expect(verbs).To(ContainElements("create"))
+				}
+			}
+
+			Expect(foundNADRule).To(BeTrue())
+			Expect(foundLeasesRule).To(BeTrue())
+			Expect(foundEventsRule).To(BeTrue())
+		})
 		It("Should Render ContainerResources", func() {
 			manifestBaseDir := "../../manifests/state-ib-kubernetes"
 
@@ -738,3 +879,11 @@ var _ = Describe("IB Kubernetes state rendering tests", func() {
 		})
 	})
 })
+
+func toStringSlice(items []interface{}) []string {
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		values = append(values, item.(string))
+	}
+	return values
+}
